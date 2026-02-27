@@ -1,4 +1,4 @@
-# Team Name — Game Name
+# Team Name — Monopoly
 
 CSC 667 Term Project — Spring 2026
 
@@ -9,7 +9,7 @@ CSC 667 Term Project — Spring 2026
 | Member 1 | @username | email@sfsu.edu |
 | Member 2 | @username | email@sfsu.edu |
 | Member 3 | @username | email@sfsu.edu |
-| Member 4 | @username | email@sfsu.edu |
+| Tejas Rajan | TejasRajan98 | trajan@sfsu.edu |
 
 ## Setup
 
