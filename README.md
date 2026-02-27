@@ -8,7 +8,7 @@ CSC 667 Term Project — Spring 2026
 |------|--------|-------|
 | Member 1 | @username | email@sfsu.edu |
 | Member 2 | @username | email@sfsu.edu |
-| Member 3 | @username | email@sfsu.edu |
+| Galvin Ha | GalvinHa | gha1@sfsu.edu |
 | Tejas Rajan | TejasRajan98 | trajan@sfsu.edu |
 
 ## Setup
