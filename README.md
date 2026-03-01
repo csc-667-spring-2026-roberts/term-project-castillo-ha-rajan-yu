@@ -1,4 +1,4 @@
-# Team Name — Monopoly
+# Team Name — Gator Tycoons
 
 CSC 667 Term Project — Spring 2026
 
@@ -6,7 +6,7 @@ CSC 667 Term Project — Spring 2026
 
 | Name | GitHub | Email |
 |------|--------|-------|
-| Member 1 | @username | email@sfsu.edu |
+| Daniel Castillo | dacastillo516 | dcastillo8@sfsu.edu |
 | Ryan Yu | ryanyu26 | ryu5@sfsu.edu |
 | Galvin Ha | GalvinHa | gha1@sfsu.edu |
 | Tejas Rajan | TejasRajan98 | trajan@sfsu.edu |
