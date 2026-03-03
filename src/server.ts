@@ -19,14 +19,14 @@ app.use(express.json());
 // Parse URL-encoded form submissions.
 app.use(express.urlencoded({ extended: true }));
 
+// Register application routes.
+app.use("/", homeRouter);
+
 // Serve static assets from the public directory.
 app.use(express.static(path.join(__dirname, "..", "public")));
 
 // Log details for each incoming request.
 app.use(requestLogger);
-
-// Register application routes.
-app.use("/", homeRouter);
 
 // Start the server and print the local URL once it is listening.
 app.listen(PORT, () => {
