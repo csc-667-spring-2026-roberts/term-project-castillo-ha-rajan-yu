@@ -4,6 +4,7 @@ import path from "path";
 import homeRouter from "./routes/home.js";
 import { requestLogger } from "./middleware/logging.js";
 import { fileURLToPath } from "url";
+import testRoutes from "./routes/test.js";
 
 // Recreate __filename and __dirname for ES modules.
 const __filename = fileURLToPath(import.meta.url);
@@ -21,6 +22,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Register application routes.
 app.use("/", homeRouter);
+app.use("/test", testRoutes);
 
 // Serve static assets from the public directory.
 app.use(express.static(path.join(__dirname, "..", "public")));
