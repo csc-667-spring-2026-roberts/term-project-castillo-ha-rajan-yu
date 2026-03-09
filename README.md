@@ -1,5 +1,4 @@
-# Team Name — Gator Tycoons
-
+# Gator Tycoons — Monopoly
 CSC 667 Term Project — Spring 2026
 
 ## Team Members
