@@ -2,8 +2,16 @@ import { Router } from "express";
 
 const router = Router();
 
-router.get("/", (_req, res) => {
-  res.status(200).send("<h1>It works!</h1>");
+// Landing route routes users to the correct auth state entry point.
+router.get("/", (req, res) => {
+  // Logged-in users should go straight to the protected lobby.
+  if (req.session.user) {
+    res.redirect("/lobby");
+    return;
+  }
+
+  // Guests are directed to the login page.
+  res.redirect("/auth/login");
 });
 
 export default router;

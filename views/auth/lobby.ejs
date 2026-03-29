@@ -1,0 +1,23 @@
+<%- include("../partials/layout-start", { title, user }) %>
+
+<%# Authenticated landing page shown only after requireAuth passes. %>
+<h1>Lobby</h1>
+<p>You are logged in. This page is protected by authentication middleware.</p>
+
+<%# Render session-backed user details for quick verification/debugging. %>
+<div class="details">
+  <div class="detail-row">
+    <span>User ID</span>
+    <span><%= user?.id %></span>
+  </div>
+  <div class="detail-row">
+    <span>Username</span>
+    <span><%= user?.username %></span>
+  </div>
+  <div class="detail-row">
+    <span>Email</span>
+    <span><%= user?.email %></span>
+  </div>
+</div>
+
+<%- include("../partials/layout-end") %>
