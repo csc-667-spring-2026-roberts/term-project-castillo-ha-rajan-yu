@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= title %> | Gator Tycoons</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body>
+    <header>
+      <nav class="nav">
+        <div class="brand">Gator Tycoons</div>
+        <div class="nav-actions">
+          <% if (typeof user !== "undefined" && user) { %>
+          <a href="/lobby">Lobby</a>
+          <form action="/auth/logout" method="post">
+            <button type="submit">Logout</button>
+          </form>
+          <% } else { %>
+          <a href="/auth/login">Login</a>
+          <% } %>
+        </div>
+      </nav>
+    </header>
+
+    <main>
+      <h1>Monopoly Game #<%= gameId %></h1>
+      <p>This game room route now exists, so Join no longer returns "Cannot GET".</p>
+      <div class="details">
+        <div class="detail-row">
+          <span>Game ID</span>
+          <span><%= gameId %></span>
+        </div>
+        <div class="detail-row">
+          <span>Player</span>
+          <span><%= user?.display_name ?? user?.email %></span>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>

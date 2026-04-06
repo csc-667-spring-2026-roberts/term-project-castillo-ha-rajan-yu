@@ -1,15 +1,18 @@
-// Import core dependencies and route/middleware modules used by the server.
-import express from "express";
+import { fileURLToPath } from "url";
 import path from "path";
 
-import session from "express-session"; //core sessions system to create and store session data
-import connectPgSimple from "connect-pg-simple"; //connects sessions to postgres so sessions survive restart
-import { Pool } from "pg"; //postgres connection pool
+import connectLivereload from "connect-livereload";
+import connectPgSimple from "connect-pg-simple";
+// M4: Express installed and configured as the primary web framework.
+import express from "express";
+import livereload from "livereload";
+import { Pool } from "pg";
+import session from "express-session";
 
+import { authRouter } from "./routes/auth.js";
 import homeRouter from "./routes/home.js";
-import authRouter from "./routes/auth.js";
+import lobbyRouter from "./routes/lobby.js";
 import { requestLogger } from "./middleware/logging.js";
-import { fileURLToPath } from "url";
 import testRoutes from "./routes/test.js";
 
 // Recreate __filename and __dirname for ES modules.
@@ -21,33 +24,19 @@ const app = express();
 // Read the port from environment variables, defaulting to 3000.
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 
-//grab values from .env
 const connectionString = process.env.DATABASE_URL;
-// In development, allow startup with a fallback secret to reduce local setup friction.
 const sessionSecret =
   process.env.SESSION_SECRET ??
   (process.env.NODE_ENV === "production" ? undefined : "dev-only-session-secret");
 
-//check them so app doesn't run broken
-if (!connectionString) {
-  throw new Error("DATABASE_URL is not set");
-}
-
-if (!sessionSecret) {
-  throw new Error("SESSION_SECRET is not set");
-}
+if (!connectionString) throw new Error("DATABASE_URL is not set");
+if (!sessionSecret) throw new Error("SESSION_SECRET is not set");
 
 if (!process.env.SESSION_SECRET && process.env.NODE_ENV !== "production") {
   console.warn("SESSION_SECRET is not set; using development fallback secret.");
 }
 
-// create a pool of resuable connections to postgres for sessions storage
-// basically to manage connections to database
-const pgPool = new Pool({
-  connectionString,
-});
-
-// create session store that saves session data in postgres
+const pgPool = new Pool({ connectionString });
 const PgStore = connectPgSimple(session);
 
 // Parse incoming JSON request bodies.
@@ -56,42 +45,58 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Configure server-side rendering with EJS templates.
+// M7: EJS is configured as the Express view engine.
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "..", "views"));
+
+// M8: live reload setup for template/CSS/client-JS refresh during development.
+if (process.env.NODE_ENV !== "production") {
+  const liveReloadServer = livereload.createServer({
+    exts: ["ejs", "css", "js"],
+  });
+
+  liveReloadServer.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code !== "EADDRINUSE") throw err;
+    console.warn("Live reload unavailable: port 35729 already in use.");
+  });
+
+  liveReloadServer.watch([
+    path.join(__dirname, "..", "views"),
+    path.join(__dirname, "..", "public"),
+  ]);
+
+  app.use(connectLivereload());
+}
 
 // Log details for each incoming request.
 app.use(requestLogger);
 
-// session middleware
 app.use(
   session({
-    //use postgres to store sessions and pool to talk to DB
+    // M6: connect-pg-simple stores sessions in Postgres (survives restarts).
     store: new PgStore({
       pool: pgPool,
       tableName: "user_sessions",
       createTableIfMissing: true,
-    }), //saves sessions in table and autocreates table if needed
-
-    secret: sessionSecret, //prevents users from tampering with session data
-    resave: false, //avoids saving session if nothing changed
-    saveUninitialized: false, //only create session when needed aka after login
-
-    //configure session cookie security settings
+    }),
+    secret: sessionSecret,
+    resave: false,
+    saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      sameSite: "lax", //helps prevent CSRF attacks
+      sameSite: "lax",
       secure: false,
     },
   }),
 );
 
-// Register application routes.
-// `authRouter` handles both `/auth/*` endpoints and protected `/lobby`.
 app.use("/", homeRouter);
-app.use("/", authRouter);
+app.use("/auth", authRouter);
+app.use("/", lobbyRouter);
+// M5: test DB route mounted for pg-promise read/write verification.
 app.use("/test", testRoutes);
 
-// Serve static assets from the public directory.
+// M4: Static file serving is configured from /public.
 app.use(express.static(path.join(__dirname, "..", "public")));
 
 // Start the server and print the local URL once it is listening.

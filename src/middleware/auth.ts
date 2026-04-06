@@ -1,19 +1,25 @@
 import type { NextFunction, Request, Response } from "express";
+import { wantsJson } from "../utils/http.js";
 
-// Blocks access to protected routes unless a session user exists.
-export function requireAuth(req: Request, res: Response, next: NextFunction): void {
-  if (!req.session.user) {
-    res.redirect("/auth/login");
+// M6: middleware protects authenticated-only routes.
+export function requireAuth(request: Request, response: Response, next: NextFunction): void {
+  if (request.session.user) {
+    next();
     return;
   }
 
-  next();
+  if (wantsJson(request)) {
+    response.status(401).json({ error: "Not authenticated." });
+    return;
+  }
+
+  // M7: browser requests are redirected to login page.
+  response.redirect("/auth/login");
 }
 
-// Keeps authenticated users out of guest-only pages like login/register.
-export function requireGuest(req: Request, res: Response, next: NextFunction): void {
-  if (req.session.user) {
-    res.redirect("/lobby");
+export function requireGuest(request: Request, response: Response, next: NextFunction): void {
+  if (request.session.user) {
+    response.redirect("/lobby");
     return;
   }
 

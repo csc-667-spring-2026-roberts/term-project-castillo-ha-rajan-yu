@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= title %> | Gator Tycoons</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+    <%# M8: client-side TypeScript bundle loaded with defer. %>
+    <script src="/js/lobby.js" defer></script>
+  </head>
+  <body>
+    <header>
+      <nav class="nav">
+        <div class="brand">Gator Tycoons</div>
+        <div class="nav-actions">
+          <% if (typeof user !== "undefined" && user) { %>
+          <form action="/auth/logout" method="post">
+            <button type="submit">Logout</button>
+          </form>
+          <% } else { %>
+          <a href="/auth/login">Login</a>
+          <a href="/auth/register">Register</a>
+          <% } %>
+        </div>
+      </nav>
+    </header>
+    <main>
+      <%# M7: Authenticated landing page (lobby) protected by auth middleware. %>
+      <h1>Lobby</h1>
+      <p>
+        <% if (user && user.display_name) { %>
+          Welcome, <strong><%= user.display_name %></strong>. You're ready to join a game.
+        <% } else { %>
+          Welcome to the lobby.
+        <% } %>
+      </p>
+
+      <div class="details">
+        <div class="detail-row">
+          <span>User ID</span>
+          <span><%= user?.id %></span>
+        </div>
+        <div class="detail-row">
+          <span>Display Name</span>
+          <span><%= user?.display_name %></span>
+        </div>
+        <div class="detail-row">
+          <span>Email</span>
+          <span><%= user?.email %></span>
+        </div>
+      </div>
+
+      <div class="games-card">
+        <div class="games-header">
+          <h2>Games</h2>
+          <!-- M8 Demo: manual trigger so you can show GET /api/games in Network tab. -->
+          <div class="games-actions">
+            <button id="refresh-games" class="create-btn" type="button">Refresh Games</button>
+            <button id="create-game" class="create-btn" type="button">Create Game</button>
+          </div>
+        </div>
+
+        <div
+          id="games-list"
+          class="games-list"
+          data-current-email="<%= user?.email ?? '' %>"
+          data-is-admin="<%= isAdmin ? 'true' : 'false' %>"
+        ></div>
+
+        <template id="game-template">
+          <div class="game-item">
+            <div class="game-info">
+              <span class="game-title"></span>
+              <span class="game-players"></span>
+            </div>
+            <div class="games-actions">
+              <button class="join-btn" type="button">Join</button>
+              <button class="delete-btn" type="button">Delete</button>
+            </div>
+          </div>
+        </template>
+
+        <template id="empty-template">
+          <p class="empty">No games yet.</p>
+        </template>
+
+        <template id="error-template">
+          <p class="empty">Error loading games.</p>
+        </template>
+      </div>
+
+      <!-- M8 Demo Panel: presentation-only status indicators for fetch + DOM updates. -->
+      <section class="details" aria-labelledby="m8-demo-title">
+        <div class="detail-row">
+          <span id="m8-demo-title">M8 Demo Checklist</span>
+          <span>Open DevTools Network, click Refresh/Create, and watch these values change live.</span>
+        </div>
+        <div class="detail-row">
+          <span>Last Action</span>
+          <span id="m8-last-action">Page loaded</span>
+        </div>
+        <div class="detail-row">
+          <span>Fetch Count</span>
+          <span id="m8-fetch-count">0</span>
+        </div>
+        <div class="detail-row">
+          <span>DOM Update Count</span>
+          <span id="m8-dom-count">0</span>
+        </div>
+        <div class="detail-row">
+          <span>Last Update Time</span>
+          <span id="m8-last-update">Not updated yet</span>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

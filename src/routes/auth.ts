@@ -1,229 +1,183 @@
-import { Router } from "express";
-import type { Request, Response } from "express";
 import bcrypt from "bcrypt";
+import { Router, type Request, type Response } from "express";
 
-import db from "../db/connection.js";
-import { requireAuth, requireGuest } from "../middleware/auth.js";
+import * as users from "../db/users.js";
+import type { User } from "../types/types.js";
+import { wantsJson } from "../utils/http.js";
 
-interface AuthViewData {
-  title: string;
-  error?: string;
-  formData?: {
-    username?: string;
+export const authRouter = Router();
+
+const BCRYPT_ROUNDS = 10;
+
+function toSessionUser(user: Pick<User, "id" | "email" | "display_name">): {
+  id: number;
+  email: string;
+  display_name: string;
+} {
+  return { id: user.id, email: user.email, display_name: user.display_name };
+}
+
+function jsonUser(user: User): { id: number; email: string; display_name: string } {
+  return { id: user.id, email: user.email, display_name: user.display_name };
+}
+
+async function handlePostRegister(request: Request, response: Response): Promise<void> {
+  const { email, password, display_name } = request.body as {
     email?: string;
+    password?: string;
+    display_name?: string;
   };
-}
 
-interface RegisterRequestBody {
-  username: string;
-  email: string;
-  password: string;
-}
+  const emailTrimmed = typeof email === "string" ? email.trim() : "";
+  const passwordRaw = typeof password === "string" ? password : "";
+  const displayTrimmed = typeof display_name === "string" ? display_name.trim() : "";
+  const emailNormalized = emailTrimmed.toLowerCase();
 
-interface LoginRequestBody {
-  email: string;
-  password: string;
-}
-
-const router = Router();
-
-// Prevent repeated CREATE TABLE checks after first successful ensure.
-let usersTableReady = false;
-
-async function ensureUsersTable(): Promise<void> {
-  if (usersTableReady) {
+  if (!emailNormalized || !passwordRaw || !displayTrimmed) {
+    if (wantsJson(request)) {
+      response.status(400).json({ error: "Email, password, and display name are required." });
+      return;
+    }
+    response.status(400).render("auth/register", {
+      title: "Register",
+      user: request.session.user ?? null,
+      error: "Email, password, and display name are required.",
+      formData: { email: emailNormalized, display_name: displayTrimmed },
+    });
     return;
   }
 
-  // Lightweight bootstrap to support auth flow even before DB migrations are in place.
-  await db.none(`
-    CREATE TABLE IF NOT EXISTS users (
-      id SERIAL PRIMARY KEY,
-      username VARCHAR(50) NOT NULL UNIQUE,
-      email VARCHAR(255) NOT NULL UNIQUE,
-      password_hash TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
+  const duplicate = await users.existing(emailNormalized);
 
-  usersTableReady = true;
+  if (duplicate) {
+    if (wantsJson(request)) {
+      response.status(400).json({ error: "An account with that email already exists." });
+      return;
+    }
+    response.status(400).render("auth/register", {
+      title: "Register",
+      user: request.session.user ?? null,
+      error: "An account with that email already exists.",
+      formData: { email: emailNormalized, display_name: displayTrimmed },
+    });
+    return;
+  }
+
+  // M6: registration hashes password with bcrypt before insert.
+  const passwordHash = await bcrypt.hash(passwordRaw, BCRYPT_ROUNDS);
+  const user = await users.create(emailNormalized, passwordHash, displayTrimmed);
+
+  request.session.user = toSessionUser(user);
+
+  if (wantsJson(request)) {
+    response.status(201).json({ message: "Registration successful.", user: jsonUser(user) });
+    return;
+  }
+
+  response.redirect("/lobby");
 }
 
-function renderRegisterPage(res: Response, data?: AuthViewData): void {
-  // Render helper centralizes view props and keeps handlers concise.
-  res.render("auth/register", {
-    title: data?.title ?? "Register",
-    error: data?.error,
-    formData: data?.formData,
-  });
+async function handlePostLogin(request: Request, response: Response): Promise<void> {
+  const { email, password } = request.body as { email?: string; password?: string };
+
+  const emailTrimmed = typeof email === "string" ? email.trim() : "";
+  const passwordRaw = typeof password === "string" ? password : "";
+  const emailNormalized = emailTrimmed.toLowerCase();
+
+  if (!emailNormalized || !passwordRaw) {
+    if (wantsJson(request)) {
+      response.status(400).json({ error: "Email and password are required." });
+      return;
+    }
+    response.status(400).render("auth/login", {
+      title: "Login",
+      user: request.session.user ?? null,
+      error: "Email and password are required.",
+      formData: { email: emailNormalized },
+    });
+    return;
+  }
+
+  // M6: login loads user by email and verifies bcrypt hash.
+  const row = await users.findByEmail(emailNormalized);
+  const valid = row !== null && (await bcrypt.compare(passwordRaw, row.password_hash));
+
+  if (!valid) {
+    if (wantsJson(request)) {
+      response.status(401).json({ error: "Invalid email or password." });
+      return;
+    }
+    response.status(401).render("auth/login", {
+      title: "Login",
+      user: request.session.user ?? null,
+      error: "Invalid email or password.",
+      formData: { email: emailNormalized },
+    });
+    return;
+  }
+
+  request.session.user = toSessionUser(row);
+
+  if (wantsJson(request)) {
+    response.status(200).json({ message: "Login successful.", user: jsonUser(row) });
+    return;
+  }
+
+  response.redirect("/lobby");
 }
 
-function renderLoginPage(res: Response, data?: AuthViewData): void {
-  // Render helper centralizes view props and keeps handlers concise.
-  res.render("auth/login", {
-    title: data?.title ?? "Login",
-    error: data?.error,
-    formData: data?.formData,
-  });
-}
-
-router.get("/auth/register", requireGuest, async (_req, res) => {
-  await ensureUsersTable();
-  renderRegisterPage(res);
-});
-
-router.post(
-  "/auth/register",
-  requireGuest,
-  async (req: Request<Record<string, never>, unknown, Partial<RegisterRequestBody>>, res) => {
-    await ensureUsersTable();
-
-    const username = (req.body.username ?? "").trim();
-    const email = (req.body.email ?? "").trim().toLowerCase();
-    const password = req.body.password ?? "";
-
-    // Basic server-side validation for required registration inputs.
-    if (!username || !email || !password) {
-      renderRegisterPage(res.status(400), {
-        title: "Register",
-        error: "All fields are required.",
-        formData: { username, email },
-      });
-      return;
-    }
-
-    if (password.length < 8) {
-      renderRegisterPage(res.status(400), {
-        title: "Register",
-        error: "Password must be at least 8 characters.",
-        formData: { username, email },
-      });
-      return;
-    }
-
-    // Prevent duplicate usernames/emails from being registered.
-    const existingUser = await db.oneOrNone<{ id: number }>(
-      "SELECT id FROM users WHERE username = $1 OR email = $2",
-      [username, email],
-    );
-
-    if (existingUser) {
-      renderRegisterPage(res.status(409), {
-        title: "Register",
-        error: "Username or email is already in use.",
-        formData: { username, email },
-      });
-      return;
-    }
-
-    // Hash password before persisting credentials.
-    const passwordHash = await bcrypt.hash(password, 10);
-
-    const createdUser = await db.one<{ id: number; username: string; email: string }>(
-      `
-        INSERT INTO users (username, email, password_hash)
-        VALUES ($1, $2, $3)
-        RETURNING id, username, email
-      `,
-      [username, email, passwordHash],
-    );
-
-    // Persist the authenticated user identity in session after registration.
-    req.session.user = {
-      id: createdUser.id,
-      username: createdUser.username,
-      email: createdUser.email,
-    };
-
-    // PRG pattern: redirect after successful form submission.
-    res.redirect("/lobby");
-  },
-);
-
-router.get("/auth/login", requireGuest, async (_req, res) => {
-  await ensureUsersTable();
-  renderLoginPage(res);
-});
-
-router.post(
-  "/auth/login",
-  requireGuest,
-  async (req: Request<Record<string, never>, unknown, Partial<LoginRequestBody>>, res) => {
-    await ensureUsersTable();
-
-    const email = (req.body.email ?? "").trim().toLowerCase();
-    const password = req.body.password ?? "";
-
-    // Validate required login credentials.
-    if (!email || !password) {
-      renderLoginPage(res.status(400), {
-        title: "Login",
-        error: "Email and password are required.",
-        formData: { email },
-      });
-      return;
-    }
-
-    // Retrieve login candidate by email.
-    const user = await db.oneOrNone<{
-      id: number;
-      username: string;
-      email: string;
-      password_hash: string;
-    }>("SELECT id, username, email, password_hash FROM users WHERE email = $1", [email]);
-
-    if (!user) {
-      renderLoginPage(res.status(401), {
-        title: "Login",
-        error: "Invalid email or password.",
-        formData: { email },
-      });
-      return;
-    }
-
-    // Compare plaintext input to stored password hash.
-    const isPasswordValid = await bcrypt.compare(password, user.password_hash);
-
-    if (!isPasswordValid) {
-      renderLoginPage(res.status(401), {
-        title: "Login",
-        error: "Invalid email or password.",
-        formData: { email },
-      });
-      return;
-    }
-
-    // Store authenticated user identity in session on successful login.
-    req.session.user = {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-    };
-
-    // PRG pattern: redirect after successful form submission.
-    res.redirect("/lobby");
-  },
-);
-
-router.post("/auth/logout", requireAuth, (req, res) => {
-  // Destroying the session logs the user out server-side.
-  req.session.destroy((error: Error | null) => {
-    if (error) {
-      res.redirect("/lobby");
-      return;
-    }
-
-    // Return guest users to login after logout.
-    res.redirect("/auth/login");
+// M7: registration page rendered by EJS form flow.
+authRouter.get("/register", (_request: Request, response: Response) => {
+  response.render("auth/register", {
+    title: "Register",
+    user: null,
+    error: undefined,
+    formData: null,
   });
 });
 
-// Authenticated landing page; protected by `requireAuth` middleware.
-router.get("/lobby", requireAuth, (req, res) => {
-  res.render("auth/lobby", {
-    title: "Lobby",
-    user: req.session.user,
+// M6: POST /auth/register route.
+authRouter.post("/register", (request, response, next) => {
+  void handlePostRegister(request, response).catch(next);
+});
+
+// M7: login page rendered by EJS form flow.
+authRouter.get("/login", (_request: Request, response: Response) => {
+  response.render("auth/login", { title: "Login", user: null, error: undefined, formData: null });
+});
+
+// M6: POST /auth/login route.
+authRouter.post("/login", (request, response, next) => {
+  void handlePostLogin(request, response).catch(next);
+});
+
+// M6: POST /auth/logout destroys session.
+authRouter.post("/logout", (request: Request, response: Response) => {
+  request.session.destroy((err: unknown) => {
+    if (err) {
+      if (wantsJson(request)) {
+        response.status(500).json({ error: "Unable to log out." });
+        return;
+      }
+      response.status(500).send("Unable to log out.");
+      return;
+    }
+
+    response.clearCookie("connect.sid");
+
+    if (wantsJson(request)) {
+      response.status(200).json({ message: "Logout successful." });
+      return;
+    }
+
+    response.redirect("/auth/login");
   });
 });
 
-export default router;
+authRouter.get("/me", (request: Request, response: Response) => {
+  if (!request.session.user) {
+    response.status(401).json({ error: "Not authenticated." });
+    return;
+  }
+  response.status(200).json({ user: request.session.user });
+});

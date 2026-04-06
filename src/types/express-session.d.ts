@@ -6,8 +6,8 @@ declare module "express-session" {
     // Minimal identity payload stored in the server-side session.
     user?: {
       id: number;
-      username: string;
       email: string;
+      display_name: string;
     };
   }
 }

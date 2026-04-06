@@ -1,17 +1,15 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 
-const router = Router();
+const homeRouter = Router();
 
-// Landing route routes users to the correct auth state entry point.
-router.get("/", (req, res) => {
-  // Logged-in users should go straight to the protected lobby.
-  if (req.session.user) {
-    res.redirect("/lobby");
+// M4: Basic route handling (home route).
+homeRouter.get("/", (request: Request, response: Response) => {
+  if (request.session.user) {
+    response.redirect("/lobby");
     return;
   }
 
-  // Guests are directed to the login page.
-  res.redirect("/auth/login");
+  response.redirect("/auth/login");
 });
 
-export default router;
+export default homeRouter;
