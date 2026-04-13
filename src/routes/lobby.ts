@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 
 import * as games from "../db/games.js";
+import { broadcast } from "../utils/sse.js";
 import { requireAuth } from "../middleware/auth.js";
 
 const lobbyRouter = Router();
@@ -55,6 +56,10 @@ lobbyRouter.post(
       return;
     }
 
+    //to broadcast join
+    const updatedGames = await games.listGames();
+    broadcast("lobby", "games:update", { games: updatedGames });
+
     response.status(200).json({ message: "Joined game.", gameId });
   },
 );
@@ -90,6 +95,11 @@ lobbyRouter.post("/api/games", requireAuth, async (request: Request, response: R
   }
 
   const created = await games.createGame(sessionUser.id);
+
+  //to broadcast after lobby vchanging actions
+  const updatedGames = await games.listGames();
+  broadcast("lobby", "games:update", { games: updatedGames });
+
   response.status(201).json({ game: created });
 });
 
@@ -120,6 +130,10 @@ lobbyRouter.delete(
         .json({ error: "Only the game creator or an admin can delete this game." });
       return;
     }
+
+    //query latest lobby state and broadcast it to everyone in lobby channel
+    const updatedGames = await games.listGames();
+    broadcast("lobby", "games:update", { games: updatedGames });
 
     response.status(200).json({ message: "Game deleted.", gameId });
   },

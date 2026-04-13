@@ -74,7 +74,96 @@ function main(): void {
     if (m8LastUpdate) m8LastUpdate.textContent = new Date().toLocaleTimeString();
   }
 
-  // eslint-disable-next-line max-lines-per-function
+  //render games added so both fethc responses and SSe messages can reuse
+  //the same DOM update logic aka makes it cleaner
+  function renderGames(games: Game[]): void {
+    gamesList.textContent = "";
+
+    if (games.length === 0) {
+      const emptyTemplate = document.getElementById("empty-template");
+      if (emptyTemplate instanceof HTMLTemplateElement) {
+        gamesList.appendChild(emptyTemplate.content.cloneNode(true));
+      }
+      markDomUpdate();
+      return;
+    }
+
+    const template = document.getElementById("game-template");
+    if (!(template instanceof HTMLTemplateElement)) return;
+
+    games.forEach((game: Game) => {
+      const clone = template.content.cloneNode(true) as DocumentFragment;
+
+      const title = clone.querySelector(".game-title");
+      const playersEl = clone.querySelector(".game-players");
+      const joinBtn = clone.querySelector(".join-btn");
+      const deleteBtn = clone.querySelector(".delete-btn");
+
+      if (!title || !playersEl || !joinBtn) return;
+
+      title.textContent = "Monopoly Game #" + String(game.id);
+      playersEl.textContent = String(game.player_count) + " / 4 players";
+
+      joinBtn.addEventListener("click", () => {
+        void (async (): Promise<void> => {
+          try {
+            markAction("Joining game via /api/games/:id/join (POST)");
+            markFetch();
+
+            const joinRes = await fetch("/api/games/" + String(game.id) + "/join", {
+              method: "POST",
+            });
+
+            if (!joinRes.ok) {
+              markAction("Join failed (check Network tab)");
+              return;
+            }
+
+            window.location.href = "/games/" + String(game.id);
+          } catch (err) {
+            console.error("Error joining game:", err);
+            markAction("Join request errored (check console/network)");
+          }
+        })();
+      });
+
+      if (deleteBtn) {
+        if (!currentUserIsAdmin && game.creator_email !== currentUserEmail) {
+          deleteBtn.remove();
+        } else {
+          deleteBtn.addEventListener("click", () => {
+            void (async (): Promise<void> => {
+              try {
+                markAction("Deleting game via /api/games/:id (DELETE)");
+                markFetch();
+
+                const deleteRes = await fetch("/api/games/" + String(game.id), {
+                  method: "DELETE",
+                });
+
+                if (!deleteRes.ok) {
+                  markAction("Delete failed (check Network tab)");
+                  return;
+                }
+
+                // M9: let SSE refresh all subscribed clients.
+              } catch (err) {
+                console.error("Error deleting game:", err);
+                markAction("Delete request errored (check console/network)");
+              }
+            })();
+          });
+        }
+      }
+
+      gamesList.appendChild(clone);
+    });
+
+    markDomUpdate();
+  }
+
+  //loadGames now only fetches and hands data to renderGames
+   
   async function loadGames(): Promise<void> {
     try {
       // M8 Demo marker: this is the GET request to show in Network tab.
@@ -82,95 +171,14 @@ function main(): void {
       markFetch();
       const res = await fetch("/api/games");
       const data = (await res.json()) as GamesResponse;
-      const games = data.games;
 
-      gamesList.textContent = "";
+      renderGames(data.games);
 
-      if (games.length === 0) {
-        const emptyTemplate = document.getElementById("empty-template");
-        if (emptyTemplate instanceof HTMLTemplateElement) {
-          gamesList.appendChild(emptyTemplate.content.cloneNode(true));
-        }
-        markDomUpdate();
-        markAction("DOM updated from empty-template (no page reload)");
-        return;
-      }
-
-      const template = document.getElementById("game-template");
-      if (!(template instanceof HTMLTemplateElement)) return;
-
-      games.forEach((game: Game) => {
-        const clone = template.content.cloneNode(true) as DocumentFragment;
-
-        const title = clone.querySelector(".game-title");
-        const playersEl = clone.querySelector(".game-players");
-        const joinBtn = clone.querySelector(".join-btn");
-        const deleteBtn = clone.querySelector(".delete-btn");
-
-        if (!title || !playersEl || !joinBtn) return;
-
-        title.textContent = "Monopoly Game #" + String(game.id);
-        playersEl.textContent = String(game.player_count) + " / 4 players";
-
-        joinBtn.addEventListener("click", () => {
-          void (async (): Promise<void> => {
-            try {
-              markAction("Joining game via /api/games/:id/join (POST)");
-              markFetch();
-
-              const joinRes = await fetch("/api/games/" + String(game.id) + "/join", {
-                method: "POST",
-              });
-
-              if (!joinRes.ok) {
-                markAction("Join failed (check Network tab)");
-                return;
-              }
-
-              window.location.href = "/games/" + String(game.id);
-            } catch (err) {
-              console.error("Error joining game:", err);
-              markAction("Join request errored (check console/network)");
-            }
-          })();
-        });
-
-        if (deleteBtn) {
-          if (!currentUserIsAdmin && game.creator_email !== currentUserEmail) {
-            deleteBtn.remove();
-          } else {
-            deleteBtn.addEventListener("click", () => {
-              void (async (): Promise<void> => {
-                try {
-                  markAction("Deleting game via /api/games/:id (DELETE)");
-                  markFetch();
-
-                  const deleteRes = await fetch("/api/games/" + String(game.id), {
-                    method: "DELETE",
-                  });
-
-                  if (!deleteRes.ok) {
-                    markAction("Delete failed (check Network tab)");
-                    return;
-                  }
-
-                  await loadGames();
-                } catch (err) {
-                  console.error("Error deleting game:", err);
-                  markAction("Delete request errored (check console/network)");
-                }
-              })();
-            });
-          }
-        }
-
-        gamesList.appendChild(clone);
-      });
-
-      markDomUpdate();
-      markAction("DOM updated from game-template (no page reload)");
+      markAction("DOM updated from empty-template (no page reload)");
     } catch (err) {
       console.error("Error loading games:", err);
+      gamesList.textContent = "";
+
       const errorTemplate = document.getElementById("error-template");
       if (errorTemplate instanceof HTMLTemplateElement) {
         gamesList.appendChild(errorTemplate.content.cloneNode(true));
@@ -197,13 +205,29 @@ function main(): void {
           markAction("Create failed (check Network tab)");
           return;
         }
-        await loadGames();
       } catch (err) {
         console.error("Error creating game:", err);
         markAction("Create request errored (check console/network)");
       }
     })();
   });
+
+  //subscribes browser to lobby updates
+  const eventSource = new EventSource("/api/events?channel=lobby");
+
+  eventSource.addEventListener("connected", () => {
+    markAction("Connected to SSE lobby channel");
+  });
+
+  eventSource.addEventListener("games:update", (event: MessageEvent<string>): void => {
+    const data = JSON.parse(event.data) as GamesResponse;
+    renderGames(data.games);
+    markAction("Updated from SSE (no reload)");
+  });
+
+  eventSource.onerror = (): void => {
+    markAction("SSE connection lost/retrying...");
+  };
 
   void loadGames();
 }

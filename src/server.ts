@@ -14,6 +14,7 @@ import homeRouter from "./routes/home.js";
 import lobbyRouter from "./routes/lobby.js";
 import { requestLogger } from "./middleware/logging.js";
 import testRoutes from "./routes/test.js";
+import eventsRouter from "./routes/events.js";
 
 // Recreate __filename and __dirname for ES modules.
 const __filename = fileURLToPath(import.meta.url);
@@ -89,6 +90,9 @@ app.use(
     },
   }),
 );
+
+//for m9
+app.use("/", eventsRouter);
 
 app.use("/", homeRouter);
 app.use("/auth", authRouter);
